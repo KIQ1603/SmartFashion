@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getMe } from '@/lib/api/users';
 import { logout } from '@/lib/api/auth';
@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/auth';
 /** Đích redirect sau khi đăng nhập Google (khớp URL backend dùng ở AuthController.googleCallback).
  * Backend chỉ chuyển accessToken qua query - trang này tự gọi /users/me để lấy thông tin user rồi
  * mới setAuth() đầy đủ (user + accessToken), đồng bộ với cách login()/register() thường làm. */
-export default function GoogleAuthCallbackPage() {
+function GoogleAuthCallback() {
   const router = useRouter();
   const params = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -57,5 +57,22 @@ export default function GoogleAuthCallbackPage() {
         <p className="text-sm text-muted-foreground">Đang hoàn tất đăng nhập...</p>
       )}
     </div>
+  );
+}
+
+// useSearchParams() bắt buộc phải nằm trong <Suspense> khi build production (next build) - local
+// dev (next dev) không bắt lỗi này, chỉ lộ ra lúc build thật trên Render nên trước đó không phát
+// hiện được. Không có Suspense thì "next build" lỗi hẳn (prerender-error), không deploy được.
+export default function GoogleAuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container-page flex min-h-[60vh] flex-col items-center justify-center gap-4 py-10 text-center">
+          <p className="text-sm text-muted-foreground">Đang hoàn tất đăng nhập...</p>
+        </div>
+      }
+    >
+      <GoogleAuthCallback />
+    </Suspense>
   );
 }
