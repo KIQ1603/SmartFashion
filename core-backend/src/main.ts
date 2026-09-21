@@ -30,7 +30,12 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  const port = process.env.CORE_BACKEND_PORT || 4000;
+  // Render (và hầu hết PaaS) tự gán biến PORT và bắt buộc app phải lắng nghe ĐÚNG cổng đó - không
+  // phải cổng tự chọn như CORE_BACKEND_PORT. Thiếu dòng ưu tiên PORT này thì app vẫn khởi động
+  // bình thường (log "successfully started") nhưng lắng nghe sai cổng, nên healthcheck của Render
+  // luôn timeout dù app không hề lỗi gì - đúng như log "Detected service running on port 4000"
+  // (cổng app tự chọn) nhưng vẫn "Timed Out" (không phải cổng Render đang dò).
+  const port = process.env.PORT || process.env.CORE_BACKEND_PORT || 4000;
   await app.listen(port);
   // Cổng NỘI BỘ container tự lắng nghe - không phải domain public thật (local hay Render đều in
   // y hệt dòng này). Ghi rõ "cổng nội bộ" để không hiểu nhầm là server đang chạy sai chỗ khi xem
