@@ -1,0 +1,142 @@
+# Render Blueprint - deploy toàn bộ hệ thống trong 1 lần "New +" > "Blueprint" trên Render,
+# trỏ vào repo GitHub này. Render sẽ tự tạo đủ 6 dịch vụ bên dưới (2 datastore + 4 app).
+#
+# Sau khi Blueprint chạy xong lần đầu, còn vài biến môi trường KHÔNG đặt được tự động ở đây
+# (env: false) vì phụ thuộc thông tin bên ngoài Render (Google Console, Cloudinary, SMTP...) -
+# vào từng service > Environment để điền tay, xem chi tiết trong README/hướng dẫn deploy.
+
+databases:
+  - name: smartfashion-db
+    databaseName: smartfashion
+    user: smartfashion
+    plan: free
+
+services:
+  # ---- Redis (cache + mã OTP tạm thời) ----
+  - type: redis
+    name: smartfashion-redis
+    plan: free
+    ipAllowList: []
+
+  # ---- Core Backend (NestJS API) ----
+  - type: web
+    name: smartfashion-backend
+    runtime: docker
+    dockerfilePath: ./core-backend/Dockerfile
+    dockerContext: ./core-backend
+    dockerCommand: sh -c "npm run build && npx prisma migrate deploy && node dist/main"
+    plan: free
+    healthCheckPath: /api/v1/settings
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartfashion-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartfashion-redis
+          property: connectionString
+      - key: CORE_BACKEND_PORT
+        value: 4000
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES
+        value: 15m
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_EXPIRES
+        value: 7d
+      - key: RECOMMENDATION_SERVICE_URL
+        fromService:
+          type: web
+          name: smartfashion-recommendation
+          property: hostport
+      - key: RECOMMENDATION_TIMEOUT_MS
+        value: 1500
+      - key: STOREFRONT_ORIGIN
+        fromService:
+          type: web
+          name: smartfashion-storefront
+          property: hostport
+      - key: ADMIN_ORIGIN
+        fromService:
+          type: web
+          name: smartfashion-admin
+          property: hostport
+      # Điền tay sau khi deploy (xem README): Google OAuth, Cloudinary, SMTP.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+
+  # ---- Storefront (Next.js) ----
+  - type: web
+    name: smartfashion-storefront
+    runtime: docker
+    dockerfilePath: ./storefront/Dockerfile
+    dockerContext: ./storefront
+    dockerCommand: sh -c "npm run build && npm run start"
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: smartfashion-backend
+          property: hostport
+      - key: INTERNAL_API_URL
+        fromService:
+          type: web
+          name: smartfashion-backend
+          property: hostport
+
+  # ---- Admin Dashboard (React + Vite, static site - không cần Docker) ----
+  - type: web
+    name: smartfashion-admin
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    rootDir: admin-dashboard
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: smartfashion-backend
+          property: hostport
+      - key: VITE_REC_SERVICE_URL
+        fromService:
+          type: web
+          name: smartfashion-recommendation
+          property: hostport
+
+  # ---- Recommendation Service (Python/FastAPI) ----
+  - type: web
+    name: smartfashion-recommendation
+    runtime: docker
+    dockerfilePath: ./recommendation-service/Dockerfile
+    dockerContext: ./recommendation-service
+    dockerCommand: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    plan: free
+    envVars:
+      - key: DATABASE_URL_SYNC
+        fromDatabase:
+          name: smartfashion-db
+          property: connectionString
