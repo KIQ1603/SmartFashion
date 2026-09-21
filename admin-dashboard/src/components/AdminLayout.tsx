@@ -12,6 +12,7 @@ import {
   UserOutlined,
   TagsOutlined,
   SettingOutlined,
+  GiftOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
@@ -25,6 +26,7 @@ const items = [
   { key: '/categories', icon: <AppstoreOutlined />, label: 'Danh mục' },
   { key: '/attributes', icon: <TagsOutlined />, label: 'Thuộc tính' },
   { key: '/orders', icon: <ShoppingOutlined />, label: 'Đơn hàng' },
+  { key: '/discount-codes', icon: <GiftOutlined />, label: 'Mã giảm giá' },
   { key: '/users', icon: <TeamOutlined />, label: 'Khách hàng' },
   { key: '/recommendation-metrics', icon: <BarChartOutlined />, label: 'Hiệu quả gợi ý' },
   { key: '/settings', icon: <SettingOutlined />, label: 'Cài đặt' },
@@ -36,6 +38,7 @@ const BREADCRUMB_LABEL: Record<string, string> = {
   '/categories': 'Danh mục',
   '/attributes': 'Thuộc tính',
   '/orders': 'Đơn hàng',
+  '/discount-codes': 'Mã giảm giá',
   '/users': 'Khách hàng',
   '/recommendation-metrics': 'Hiệu quả gợi ý',
   '/settings': 'Cài đặt',
@@ -60,7 +63,10 @@ export default function AdminLayout() {
   }, [location.pathname]);
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#F3F4F6' }}>
+    // height:100vh + overflow:hidden ở khối ngoài cùng - trước đây chỉ có minHeight nên khi nội
+    // dung Content dài hơn màn hình, cả trang (kể cả Sider/Header) cuộn theo luôn. Giờ chỉ Content
+    // tự cuộn bên trong, Sider/Header đứng yên tại chỗ như 1 khung ứng dụng thật.
+    <Layout style={{ height: '100vh', overflow: 'hidden', background: '#F3F4F6' }}>
       {/* Sider "nổi" kiểu dynamic island - viền bo tròn + hở khoảng cách quanh 4 cạnh thay vì áp
           sát mép trái/trên/dưới màn hình như trước, không cần rộng/cao hết màn. */}
       <Sider
@@ -103,7 +109,7 @@ export default function AdminLayout() {
         />
       </Sider>
 
-      <Layout style={{ background: '#F3F4F6' }}>
+      <Layout style={{ background: '#F3F4F6', height: '100vh', overflow: 'hidden' }}>
         {/* Header nổi cùng kiểu với Sider - hở phía trên thay vì áp sát mép màn hình, bo tròn hết
             4 góc (không phải chỉ đứng chung khối chữ nhật với Sider như trước). */}
         <Header
@@ -152,10 +158,12 @@ export default function AdminLayout() {
           </div>
         </Header>
 
-        <Content style={{ padding: 24, marginTop: 16 }}>
-          <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-            <Outlet />
-          </div>
+        {/* Content tự cuộn riêng (overflowY), chiều cao = 100vh trừ header (64px) + các khoảng hở
+            (16px trên header, 16px giữa header/content, 24px padding dưới) - Sider/Header không
+            còn bị kéo theo nữa. Bỏ maxWidth 1280 cũ - bảng dữ liệu (sản phẩm, đơn hàng...) giờ dùng
+            hết chiều rộng thật có, không bị bó hẹp giữa màn hình rộng. */}
+        <Content style={{ padding: 24, marginTop: 16, height: 'calc(100vh - 120px)', overflowY: 'auto' }}>
+          <Outlet />
         </Content>
       </Layout>
     </Layout>

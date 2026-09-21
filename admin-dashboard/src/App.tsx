@@ -9,6 +9,7 @@ import OrdersPage from '@/pages/Orders/OrdersPage';
 import UsersPage from '@/pages/Users/UsersPage';
 import RecommendationMetricsPage from '@/pages/RecommendationMetrics/RecommendationMetricsPage';
 import AttributesPage from '@/pages/Attributes/AttributesPage';
+import DiscountCodesPage from '@/pages/DiscountCodes/DiscountCodesPage';
 import SettingsPage from '@/pages/Settings/SettingsPage';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/discount-codes" element={<DiscountCodesPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/recommendation-metrics" element={<RecommendationMetricsPage />} />
           </Route>

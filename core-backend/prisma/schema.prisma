@@ -248,7 +248,12 @@ model Order {
   status          OrderStatus @default(pending)
   totalAmount     Decimal     @map("total_amount") @db.Decimal(12, 2)
   paymentMethod   String?     @map("payment_method")
+  // Field đã có sẵn từ trước nhưng chưa từng được dùng thật (không có bảng mã giảm giá nào cả) -
+  // giờ nối vào DiscountCode thật. discountAmount lưu số tiền đã giảm TẠI THỜI ĐIỂM đặt hàng (độc
+  // lập với mã sau này có đổi/hết hạn hay không) - totalAmount là số tiền cuối cùng khách trả, đã
+  // trừ giảm giá.
   discountCode    String?     @map("discount_code")
+  discountAmount  Decimal?    @map("discount_amount") @db.Decimal(12, 2)
   // Lý do hủy đơn - khách bắt buộc phải nhập khi hủy (chỉ hủy được khi status còn pending/confirmed,
   // tức cửa hàng CHƯA đóng gói - xem VALID_TRANSITIONS/cancel() ở orders.service.ts).
   cancelReason    String?     @map("cancel_reason")
@@ -257,6 +262,34 @@ model Order {
   items OrderItem[]
 
   @@map("orders")
+}
+
+enum DiscountType {
+  percentage
+  fixed
+}
+
+// Mã giảm giá - admin tạo tay hoặc nhập hàng loạt từ Excel (giống luồng nhập sản phẩm). "code" lưu
+// chữ HOA thống nhất (chuẩn hoá ở service, không phân biệt hoa/thường lúc khách nhập). Không tách
+// bảng "lượt dùng theo user" riêng (ngoài phạm vi đồ án) - usedCount là tổng lượt dùng toàn hệ
+// thống, đủ để chặn maxUses; muốn giới hạn "mỗi người 1 lần" là việc mở rộng sau.
+model DiscountCode {
+  id                String       @id @default(uuid())
+  code              String       @unique
+  type              DiscountType
+  value             Decimal      @db.Decimal(12, 2)
+  minOrderAmount    Decimal?     @map("min_order_amount") @db.Decimal(12, 2)
+  // Chỉ áp dụng cho type=percentage - chặn trần số tiền giảm tuyệt đối (vd "giảm 50%, tối đa 100k")
+  maxDiscountAmount Decimal?     @map("max_discount_amount") @db.Decimal(12, 2)
+  maxUses           Int?         @map("max_uses")
+  usedCount         Int          @default(0) @map("used_count")
+  startsAt          DateTime?    @map("starts_at")
+  expiresAt         DateTime?    @map("expires_at")
+  isActive          Boolean      @default(true) @map("is_active")
+  description       String?
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  @@map("discount_codes")
 }
 
 model OrderItem {

@@ -1,7 +1,7 @@
 import { apiFetch } from './client';
 import type { Order } from '@/types';
 
-export function checkout(data: { addressId?: string; paymentMethod: string }) {
+export function checkout(data: { addressId?: string; paymentMethod: string; discountCode?: string }) {
   return apiFetch<Order>('/orders', { method: 'POST', body: JSON.stringify(data) });
 }
 

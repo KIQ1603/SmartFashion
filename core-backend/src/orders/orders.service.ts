@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { DiscountCodesService } from '../discount-codes/discount-codes.service';
 
 // State machine hợp lệ cho đơn hàng (đặc tả kiến trúc mục 2.2). Thêm "packed" (đã đóng gói) giữa
 // confirmed và shipping - mốc chặn hủy đơn: khách chỉ hủy được khi đơn CHƯA đóng gói (pending/
@@ -20,9 +21,12 @@ const CANCELLABLE_STATUSES: OrderStatus[] = ['pending', 'confirmed'];
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private discountCodes: DiscountCodesService,
+  ) {}
 
-  async checkout(userId: string, addressId: string | undefined, paymentMethod: string) {
+  async checkout(userId: string, addressId: string | undefined, paymentMethod: string, discountCode?: string) {
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: { items: { include: { variant: { include: { product: true } } } } },
@@ -31,14 +35,25 @@ export class OrdersService {
 
     // Transaction (ACID): kiểm tra tồn kho -> trừ kho -> tạo order, tránh oversell
     const order = await this.prisma.$transaction(async (tx) => {
-      let totalAmount = 0;
+      let subtotal = 0;
       for (const item of cart.items) {
         const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } });
         if (!variant || variant.stockQuantity < item.quantity) {
           throw new BadRequestException(`Sản phẩm "${item.variant.product.name}" không đủ tồn kho.`);
         }
-        totalAmount += Number(item.variant.product.basePrice) * item.quantity;
+        subtotal += Number(item.variant.product.basePrice) * item.quantity;
       }
+
+      // Validate lại mã giảm giá NGAY TRONG transaction thay vì tin số discountAmount client gửi -
+      // mã có thể vừa hết hạn/hết lượt giữa lúc khách xem giỏ hàng và lúc bấm đặt hàng thật.
+      let appliedCode: string | null = null;
+      let discountAmount = 0;
+      if (discountCode?.trim()) {
+        const result = await this.discountCodes.validate(discountCode, subtotal, tx);
+        appliedCode = result.discountCode;
+        discountAmount = result.discountAmount;
+      }
+      const totalAmount = subtotal - discountAmount;
 
       const createdOrder = await tx.order.create({
         data: {
@@ -46,6 +61,8 @@ export class OrdersService {
           addressId,
           paymentMethod,
           totalAmount,
+          discountCode: appliedCode,
+          discountAmount: appliedCode ? discountAmount : null,
           status: 'pending',
           items: {
             create: cart.items.map((item) => ({
@@ -57,6 +74,10 @@ export class OrdersService {
         },
         include: { items: true },
       });
+
+      if (appliedCode) {
+        await this.discountCodes.applyUsage(appliedCode, tx);
+      }
 
       for (const item of cart.items) {
         await tx.productVariant.update({

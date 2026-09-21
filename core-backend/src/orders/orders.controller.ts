@@ -12,8 +12,11 @@ export class OrdersController {
   constructor(private ordersService: OrdersService) {}
 
   @Post('orders')
-  checkout(@CurrentUser() user: JwtUserPayload, @Body() body: { addressId?: string; paymentMethod: string }) {
-    return this.ordersService.checkout(user.userId, body.addressId, body.paymentMethod);
+  checkout(
+    @CurrentUser() user: JwtUserPayload,
+    @Body() body: { addressId?: string; paymentMethod: string; discountCode?: string },
+  ) {
+    return this.ordersService.checkout(user.userId, body.addressId, body.paymentMethod, body.discountCode);
   }
 
   @Get('orders')

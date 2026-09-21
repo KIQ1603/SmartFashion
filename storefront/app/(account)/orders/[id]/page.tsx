@@ -182,6 +182,12 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
               <span>Phí vận chuyển</span>
               <span className="text-success">Miễn phí</span>
             </div>
+            {order.discountCode && Number(order.discountAmount) > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Giảm giá ({order.discountCode})</span>
+                <span className="tabular-nums text-success">-{formatVnd(order.discountAmount!)}</span>
+              </div>
+            )}
           </div>
           <div className="flex justify-between border-t border-border pt-4 text-base font-semibold text-foreground">
             <span>Tổng cộng</span>

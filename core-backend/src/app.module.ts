@@ -14,6 +14,7 @@ import { InteractionsModule } from './interactions/interactions.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { AdminModule } from './admin/admin.module';
 import { SettingsModule } from './settings/settings.module';
+import { DiscountCodesModule } from './discount-codes/discount-codes.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SettingsModule } from './settings/settings.module';
     RecommendationsModule,
     AdminModule,
     SettingsModule,
+    DiscountCodesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

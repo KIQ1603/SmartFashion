@@ -69,6 +69,8 @@ export interface Order {
   status: 'pending' | 'confirmed' | 'packed' | 'shipping' | 'delivered' | 'cancelled';
   totalAmount: string | number;
   paymentMethod?: string | null;
+  discountCode?: string | null;
+  discountAmount?: string | number | null;
   cancelReason?: string | null;
   createdAt: string;
   items: Array<{ id: string; quantity: number; price: string | number; variant: ProductVariant & { product: Product } }>;

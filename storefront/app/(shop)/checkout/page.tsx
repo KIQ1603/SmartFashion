@@ -8,6 +8,7 @@ import { getCart } from '@/lib/api/cart';
 import { getAddresses, createAddress } from '@/lib/api/users';
 import { getSiteSettings, type SiteSettings } from '@/lib/api/settings';
 import { checkout } from '@/lib/api/orders';
+import { validateDiscountCode } from '@/lib/api/discount-codes';
 import { recordInteraction } from '@/lib/api/interactions';
 import { formatVnd } from '@/lib/utils/format';
 import { useAuthStore } from '@/store/auth';
@@ -26,6 +27,14 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Mã giảm giá: xem trước ngay khi bấm "Áp dụng" (validate riêng, KHÔNG tăng lượt dùng) - sửa lại
+  // input sau khi đã áp thì huỷ kết quả cũ, bắt bấm "Áp dụng" lại để tránh gửi mã cũ không khớp ô
+  // nhập hiện tại lúc đặt hàng thật.
+  const [discountInput, setDiscountInput] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; amount: number } | null>(null);
+  const [discountLoading, setDiscountLoading] = useState(false);
+  const [discountError, setDiscountError] = useState<string | null>(null);
 
   useEffect(() => {
     // Đợi zustand persist rehydrate xong (đọc localStorage) rồi mới quyết định redirect - chưa
@@ -50,6 +59,21 @@ export default function CheckoutPage() {
 
   const hasBankInfo = !!(settings?.bankName && settings?.bankAccountNumber && settings?.bankAccountHolder);
 
+  async function applyDiscount() {
+    if (!cart || !discountInput.trim()) return;
+    setDiscountLoading(true);
+    setDiscountError(null);
+    try {
+      const result = await validateDiscountCode(discountInput.trim(), cart.subtotal);
+      setAppliedDiscount({ code: result.discountCode, amount: result.discountAmount });
+    } catch (err: any) {
+      setAppliedDiscount(null);
+      setDiscountError(err.message || 'Mã giảm giá không hợp lệ.');
+    } finally {
+      setDiscountLoading(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!cart || cart.items.length === 0) return;
@@ -66,7 +90,7 @@ export default function CheckoutPage() {
         const created = await createAddress({ ...newAddress, isDefault: (addresses?.length ?? 0) === 0 });
         addressId = created.id;
       }
-      const order = await checkout({ addressId: addressId!, paymentMethod });
+      const order = await checkout({ addressId: addressId!, paymentMethod, discountCode: appliedDiscount?.code });
       // Ghi nhận interaction "purchase" cho từng sản phẩm (đã ghi ở backend khi checkout,
       // gọi thêm ở client chỉ để chắc chắn UI đồng bộ ngay lập tức - không bắt buộc)
       await Promise.all(cart.items.map((item) => recordInteraction(item.variant.product.id, 'purchase')));
@@ -251,6 +275,43 @@ export default function CheckoutPage() {
             </div>
           ))}
         </div>
+        {/* Mã giảm giá - xem trước ngay (validate riêng, không cần đặt hàng mới biết giảm bao
+            nhiêu), sửa ô nhập sau khi áp thì huỷ kết quả cũ để tránh lệch giữa hiển thị và mã thật
+            gửi lên lúc đặt hàng. */}
+        <div className="border-b border-border-soft pb-4">
+          <label className="mb-1.5 block text-sm font-medium text-foreground">Mã giảm giá</label>
+          <div className="flex gap-2">
+            <input
+              className="input flex-1"
+              placeholder="Nhập mã..."
+              value={discountInput}
+              onChange={(e) => {
+                setDiscountInput(e.target.value);
+                setAppliedDiscount(null);
+                setDiscountError(null);
+              }}
+            />
+            <button
+              type="button"
+              onClick={applyDiscount}
+              disabled={discountLoading || !discountInput.trim()}
+              className="btn-outline shrink-0 px-4 disabled:opacity-50"
+            >
+              {discountLoading ? '...' : 'Áp dụng'}
+            </button>
+          </div>
+          {discountError && (
+            <p className="mt-1.5 text-xs text-destructive" role="alert">
+              {discountError}
+            </p>
+          )}
+          {appliedDiscount && (
+            <p className="mt-1.5 text-xs text-success">
+              Đã áp mã "{appliedDiscount.code}" — giảm {formatVnd(appliedDiscount.amount)}.
+            </p>
+          )}
+        </div>
+
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
             <span>Tạm tính</span>
@@ -260,10 +321,16 @@ export default function CheckoutPage() {
             <span>Phí vận chuyển</span>
             <span className="text-success">Miễn phí</span>
           </div>
+          {appliedDiscount && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Giảm giá ({appliedDiscount.code})</span>
+              <span className="tabular-nums text-success">-{formatVnd(appliedDiscount.amount)}</span>
+            </div>
+          )}
         </div>
         <div className="flex justify-between border-t border-border pt-4 text-base font-semibold text-foreground">
           <span>Tổng cộng</span>
-          <span className="tabular-nums">{formatVnd(cart.subtotal)}</span>
+          <span className="tabular-nums">{formatVnd(cart.subtotal - (appliedDiscount?.amount || 0))}</span>
         </div>
       </div>
     </div>
