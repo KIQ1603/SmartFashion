@@ -47,23 +47,18 @@ services:
         generateValue: true
       - key: JWT_REFRESH_EXPIRES
         value: 7d
+      # "fromService ... property: hostport" không phải property thật của Render (chỉ có host/port
+      # riêng, không có dạng gộp) nên trước đó luôn báo "used but not defined". Ghi thẳng URL dự
+      # đoán được theo đúng quy luật tên miền Render (https://<tên service>.onrender.com) - tên
+      # service khớp chính xác với "name" khai báo bên dưới nên không lo bị đoán sai.
       - key: RECOMMENDATION_SERVICE_URL
-        fromService:
-          type: web
-          name: smartfashion-recommendation
-          property: hostport
+        value: https://smartfashion-recommendation.onrender.com
       - key: RECOMMENDATION_TIMEOUT_MS
         value: 1500
       - key: STOREFRONT_ORIGIN
-        fromService:
-          type: web
-          name: smartfashion-storefront
-          property: hostport
+        value: https://smartfashion-storefront.onrender.com
       - key: ADMIN_ORIGIN
-        fromService:
-          type: web
-          name: smartfashion-admin
-          property: hostport
+        value: https://smartfashion-admin.onrender.com
       # Điền tay sau khi deploy (xem README): Google OAuth, Cloudinary, SMTP.
       - key: GOOGLE_CLIENT_ID
         sync: false
@@ -98,15 +93,9 @@ services:
     plan: free
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: smartfashion-backend
-          property: hostport
+        value: https://smartfashion-backend.onrender.com/api/v1
       - key: INTERNAL_API_URL
-        fromService:
-          type: web
-          name: smartfashion-backend
-          property: hostport
+        value: https://smartfashion-backend.onrender.com/api/v1
 
   # ---- Admin Dashboard (React + Vite, static site - không cần Docker) ----
   - type: web
@@ -117,15 +106,9 @@ services:
     rootDir: admin-dashboard
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: smartfashion-backend
-          property: hostport
+        value: https://smartfashion-backend.onrender.com/api/v1
       - key: VITE_REC_SERVICE_URL
-        fromService:
-          type: web
-          name: smartfashion-recommendation
-          property: hostport
+        value: https://smartfashion-recommendation.onrender.com
 
   # ---- Recommendation Service (Python/FastAPI) ----
   - type: web
