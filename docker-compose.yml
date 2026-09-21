@@ -1,0 +1,115 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sf-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-smartfashion}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smartfashion}
+      POSTGRES_DB: ${POSTGRES_DB:-smartfashion}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smartfashion}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: sf-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  core-backend:
+    build:
+      context: ./core-backend
+    container_name: sf-core-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-smartfashion}:${POSTGRES_PASSWORD:-smartfashion}@postgres:5432/${POSTGRES_DB:-smartfashion}?schema=public
+      REDIS_URL: redis://redis:6379
+      RECOMMENDATION_SERVICE_URL: http://recommendation-service:8000
+      # Container luôn lắng nghe cổng nội bộ cố định 4000, bất kể .env đặt CORE_BACKEND_PORT
+      # là bao nhiêu cho phía host - tránh lệch cổng khi env_file cũng nạp CORE_BACKEND_PORT.
+      CORE_BACKEND_PORT: 4000
+      # CORS whitelist - phải khớp cổng HOST thật mà trình duyệt đang truy cập storefront/admin
+      # (không phải cổng nội bộ container), nên lấy từ STOREFRONT_PORT/ADMIN_PORT trong .env thay
+      # vì hardcode 3000/5173 - thiếu dòng này thì đổi cổng ở .env sẽ làm mọi request bị CORS chặn.
+      STOREFRONT_ORIGIN: http://localhost:${STOREFRONT_PORT:-3000}
+      ADMIN_ORIGIN: http://localhost:${ADMIN_PORT:-5173}
+    ports:
+      - "${CORE_BACKEND_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./core-backend:/app
+      - /app/node_modules
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run start:dev"
+
+  recommendation-service:
+    build:
+      context: ./recommendation-service
+    container_name: sf-recommendation-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-smartfashion}:${POSTGRES_PASSWORD:-smartfashion}@postgres:5432/${POSTGRES_DB:-smartfashion}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${REC_SERVICE_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./recommendation-service:/app
+
+  storefront:
+    build:
+      context: ./storefront
+    container_name: sf-storefront
+    restart: unless-stopped
+    environment:
+      # NEXT_PUBLIC_API_URL: dùng cho trình duyệt (Client Component) - phải là URL truy cập được từ host.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+      # INTERNAL_API_URL: dùng cho Server Component (SSR chạy trong container) - gọi thẳng qua mạng nội bộ Docker.
+      INTERNAL_API_URL: http://core-backend:4000/api/v1
+    ports:
+      - "${STOREFRONT_PORT:-3000}:3000"
+    depends_on:
+      - core-backend
+    volumes:
+      - ./storefront:/app
+      - /app/node_modules
+      - /app/.next
+
+  admin-dashboard:
+    build:
+      context: ./admin-dashboard
+    container_name: sf-admin-dashboard
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:4000/api/v1}
+      VITE_REC_SERVICE_URL: ${VITE_REC_SERVICE_URL:-http://localhost:8000}
+    ports:
+      - "${ADMIN_PORT:-5173}:5173"
+    depends_on:
+      - core-backend
+    volumes:
+      - ./admin-dashboard:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:

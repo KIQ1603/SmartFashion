@@ -1,0 +1,367 @@
+// ============================================================
+// SmartFashion - Prisma schema
+// Bám theo thiết kế DB trong docs/phanticbaitoan.md (mục 3)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // "native" cho môi trường dev trên máy host; 2 target musl còn lại để chạy đúng bên trong
+  // container node:20-alpine (Docker) - tránh lỗi "could not locate the Query Engine" khi build image.
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- Enums ----------------
+
+enum Role {
+  customer
+  admin
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum ProductStatus {
+  active
+  out_of_stock
+  discontinued
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  packed
+  shipping
+  delivered
+  cancelled
+}
+
+enum InteractionType {
+  view
+  wishlist
+  add_to_cart
+  remove_from_cart
+  purchase
+  return
+}
+
+enum ReviewStatus {
+  visible
+  hidden
+}
+
+enum AlgorithmUsed {
+  popularity
+  content_based
+  collaborative
+  hybrid
+}
+
+// ---------------- Core E-commerce ----------------
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  fullName      String    @map("full_name")
+  gender        Gender?
+  birthYear     Int?      @map("birth_year")
+  role          Role      @default(customer)
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  addresses     Address[]
+  carts         Cart[]
+  orders        Order[]
+  interactions  UserInteraction[]
+  wishlist      WishlistItem[]
+  reviews       Review[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Address {
+  id         String  @id @default(uuid())
+  userId     String  @map("user_id")
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipient  String
+  phone      String
+  line       String
+  city       String
+  province   String?
+  isDefault  Boolean @default(false) @map("is_default")
+
+  orders Order[]
+
+  @@map("addresses")
+}
+
+model Category {
+  id       String     @id @default(uuid())
+  name     String
+  slug     String     @unique
+  parentId String?    @map("parent_id")
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  name        String
+  slug        String        @unique
+  description String?
+  categoryId  String        @map("category_id")
+  category    Category      @relation(fields: [categoryId], references: [id])
+  brand       String?
+  basePrice   Decimal       @map("base_price") @db.Decimal(12, 2)
+  // Giá gốc trước giảm giá - null nghĩa là không sale. Hiển thị badge -X% khi compareAtPrice > basePrice.
+  compareAtPrice Decimal?   @map("compare_at_price") @db.Decimal(12, 2)
+  material    String?
+  styleTags   String[]      @map("style_tags")
+  season      String?
+  status      ProductStatus @default(active)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  variants     ProductVariant[]
+  images       ProductImage[]
+  reviews      Review[]
+  wishlistedBy WishlistItem[]
+  interactions UserInteraction[]
+
+  @@index([categoryId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id            String  @id @default(uuid())
+  productId     String  @map("product_id")
+  product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size          String
+  color         String
+  stockQuantity Int     @default(0) @map("stock_quantity")
+  sku           String  @unique
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([productId, size, color])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  imageUrl  String  @map("image_url")
+  isPrimary Boolean @default(false) @map("is_primary")
+  // Null = ảnh chung của sản phẩm (không gắn màu cụ thể). Có giá trị = ảnh minh họa riêng cho
+  // 1 màu biến thể (vd: khách chọn màu "đen" ở trang chi tiết -> đổi sang ảnh này).
+  color     String?
+
+  @@map("product_images")
+}
+
+model Review {
+  id        String       @id @default(uuid())
+  productId String       @map("product_id")
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String       @map("user_id")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  status    ReviewStatus @default(visible)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  // Mỗi khách chỉ đánh giá 1 sản phẩm 1 lần - trước đây không có ràng buộc này, khách đã mua vẫn
+  // gửi được vô hạn đánh giá lặp lại cho cùng 1 sản phẩm (spam).
+  @@unique([productId, userId])
+  @@map("reviews")
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, productId])
+  @@map("wishlist_items")
+}
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String?  @unique @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?  @unique @map("session_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String         @id @default(uuid())
+  cartId    String         @map("cart_id")
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String         @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int            @default(1)
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  user            User        @relation(fields: [userId], references: [id])
+  addressId       String?     @map("address_id")
+  address         Address?    @relation(fields: [addressId], references: [id])
+  status          OrderStatus @default(pending)
+  totalAmount     Decimal     @map("total_amount") @db.Decimal(12, 2)
+  paymentMethod   String?     @map("payment_method")
+  discountCode    String?     @map("discount_code")
+  // Lý do hủy đơn - khách bắt buộc phải nhập khi hủy (chỉ hủy được khi status còn pending/confirmed,
+  // tức cửa hàng CHƯA đóng gói - xem VALID_TRANSITIONS/cancel() ở orders.service.ts).
+  cancelReason    String?     @map("cancel_reason")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  items OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String         @id @default(uuid())
+  orderId   String         @map("order_id")
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId String         @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int
+  price     Decimal        @db.Decimal(12, 2)
+
+  @@map("order_items")
+}
+
+// ---------------- Recommendation-specific tables ----------------
+
+model UserInteraction {
+  id                BigInt           @id @default(autoincrement())
+  userId            String?          @map("user_id")
+  user              User?            @relation(fields: [userId], references: [id])
+  sessionId         String?          @map("session_id")
+  productId         String           @map("product_id")
+  product           Product          @relation(fields: [productId], references: [id])
+  interactionType   InteractionType  @map("interaction_type")
+  implicitScore     Float            @map("implicit_score")
+  dwellTimeSeconds  Int?             @map("dwell_time_seconds")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([productId, createdAt])
+  @@map("user_interactions")
+}
+
+model ProductSimilarityCache {
+  productIdA      String   @map("product_id_a")
+  productIdB      String   @map("product_id_b")
+  similarityScore Float    @map("similarity_score")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@id([productIdA, productIdB])
+  @@map("product_similarity_cache")
+}
+
+model UserRecommendationCache {
+  userId        String         @map("user_id")
+  productId     String         @map("product_id")
+  score         Float
+  algorithmUsed AlgorithmUsed  @map("algorithm_used")
+  generatedAt   DateTime       @default(now()) @map("generated_at")
+
+  @@id([userId, productId])
+  @@map("user_recommendations_cache")
+}
+
+model ModelTrainingLog {
+  id                String   @id @default(uuid())
+  trainedAt         DateTime @default(now()) @map("trained_at")
+  algorithm         String
+  precisionAtK      Float?   @map("precision_at_k")
+  recallAtK         Float?   @map("recall_at_k")
+  rmse              Float?
+  trainingDataSize  Int      @map("training_data_size")
+
+  @@map("model_training_logs")
+}
+
+// Danh sách tùy chọn cấu hình được cho form Thêm/Sửa sản phẩm ở admin-dashboard (thương hiệu,
+// chất liệu, mùa) - Product.brand/material/season vẫn là String tự do (tránh phải migrate quan
+// hệ khóa ngoại cho dữ liệu cũ), bảng này chỉ là danh sách gợi ý/chọn nhanh, admin gõ thêm giá
+// trị mới ngay trong lúc tạo sản phẩm thì tự lưu vào đây cho các lần sau.
+model AttributeOption {
+  id    String @id @default(uuid())
+  type  String
+  value String
+
+  @@unique([type, value])
+  @@map("attribute_options")
+}
+
+// Cấu hình toàn site (banner trang chủ + thông tin liên hệ cửa hàng + tài khoản chuyển khoản) -
+// chỉ 1 bản ghi duy nhất (id cố định "singleton"), admin sửa qua PATCH /admin/settings, storefront
+// đọc qua GET /settings (public). Mọi field đều nullable - trống thì storefront ẩn hẳn phần đó đi
+// thay vì hiện chuỗi rỗng/placeholder giả, đúng nguyên tắc không bịa dữ liệu khi chưa cấu hình.
+model SiteSetting {
+  id String @id @default("singleton")
+
+  heroImageUrl   String?
+  heroTitle      String?
+  heroSubtitle   String?
+  heroCtaText    String?
+  heroCtaHref    String?
+  // Nhiều slide hero tuỳ chỉnh (mảng {imageUrl,title,subtitle,ctaText,ctaHref}) - khi admin đã
+  // cấu hình thì storefront ưu tiên dùng đúng danh sách này (đủ quyền kiểm soát ảnh hiển thị),
+  // để trống thì storefront tự dùng heroImageUrl phía trên + sản phẩm nổi bật làm slide dự phòng.
+  heroSlides Json?
+
+  storeAddress String?
+  storePhone   String?
+  storeEmail   String?
+
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountHolder String?
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}

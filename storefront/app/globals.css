@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Design tokens — Fashion Editorial Minimalism (note.md design system v2) =====
+   Warm neutral (không phải xám lạnh zinc) + 1 accent terracotta ấm, grid-based, high contrast
+   nhưng không lạnh. Giá trị RGB (không phải hex) để Tailwind ghép được alpha qua
+   rgb(var(--x) / <alpha-value>). Hex gốc ghi cạnh mỗi dòng để đối chiếu ngược với design spec. */
+:root {
+  /* Nền XÁM NHẸ - XÁM SÁNG (không phải cream/tan như bản trước, cũng không trắng) - theo đúng
+     phản hồi trực tiếp. Card/ảnh giữ TRẮNG THẬT (--color-card) + shadow rõ để tương phản đủ mạnh
+     với nền xám, tạo cảm giác "nổi" lên hẳn - trước đây nền cream quá gần tông với card nên độ
+     nổi không rõ. */
+  --color-background: 237 237 235; /* #EDEDEB — xám sáng trung tính, hơi ấm rất nhẹ */
+  --color-foreground: 23 23 23; /* #171717 — primary text */
+  --color-card: 255 255 255;
+  /* Đậm hơn hẳn bản trước (#DBDBD8 quá gần --background #EDEDEB, chênh có 18 đơn vị RGB nên viền
+     gần như vô hình, nhất là quanh ảnh sáng màu) - phản hồi trực tiếp: "khung cho rõ". */
+  --color-border: 199 199 195; /* #C7C7C3 */
+  --color-border-soft: 217 217 213; /* #D9D9D5 — divider nhẹ hơn, tách khối phụ trong 1 section */
+  --color-muted: 225 224 220; /* #E1E0DC — secondary background (đậm hơn 1 nấc so với --background, dùng cho vùng "lõm") */
+  --color-muted-foreground: 95 96 101; /* #5F6065 — secondary text */
+  /* --color-warm trả về gần trắng như trước (bản xanh nhạt bị phản hồi "không phải rồi") - dùng
+     cho card chứa nội dung (tóm tắt đơn, khối sản phẩm/địa chỉ/thanh toán...) để luôn có nền thật
+     phía sau chữ (không để chữ nổi trực tiếp trên --background), khác card trắng tinh (--color-card)
+     ở chỗ card trắng dùng cho input/nút bên trong. */
+  --color-warm: 252 252 251; /* #FCFCFB */
+
+  --color-primary: 23 23 23; /* #171717 — near-black, CTA chính */
+  --color-primary-light: 47 47 47; /* hover state, đậm hơn 1 nấc */
+  --color-primary-foreground: 255 255 255;
+
+  --color-accent: 201 75 25; /* #C94B19 terracotta ấm — sale badge, wishlist active, CTA nhấn mạnh */
+  --color-accent-foreground: 255 255 255;
+
+  --color-destructive: 200 60 60; /* #C83C3C */
+  --color-success: 47 125 90; /* #2F7D5A */
+  --color-warning: 217 119 6; /* #D97706 */
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+}
+
+/* Đặt trong @layer components để các utility class ghi đè sau (vd. className="input pl-9")
+   luôn thắng theo cascade của Tailwind, bất kể thứ tự khai báo trong file này. Thiếu @layer
+   là nguyên nhân icon tìm kiếm từng đè lên chữ đầu placeholder (px-3.5 mặc định thắng pl-9). */
+@layer components {
+  /* Rộng hơn hẳn bản trước (1240px -> 1600px) + lề 2 bên thu hẹp tối đa - phản hồi trực tiếp: "làm
+     rộng và để cho ít 2 bên lề nhất có thể". Dùng CHUNG cho mọi trang (header/content/footer/
+     checkout) để mép trái/phải luôn thẳng hàng. */
+  .container-page {
+    @apply mx-auto max-w-[1600px] px-3 sm:px-5 lg:px-8;
+  }
+
+  .section-heading {
+    @apply font-serif text-xl font-medium tracking-tight text-foreground sm:text-3xl;
+  }
+
+  /* rounded-full (pill) thay vì rounded-md - khớp phong cách tham khảo "soft app premium" (mọi CTA
+     đều dạng pill: Shop Now/Add to Cart/Buy Now). active:scale mô phỏng phản hồi vật lý khi bấm
+     (redesign-existing-projects audit: "No active/pressed feedback") — transform/opacity only,
+     không ảnh hưởng layout. */
+  .btn-primary {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-medium text-brand-foreground transition-all duration-200 hover:bg-brand-light active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+
+  .btn-outline {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-card px-6 py-2.5 text-sm font-medium text-foreground transition-all duration-200 hover:border-foreground active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+
+  .btn-ghost {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-muted hover:text-foreground active:scale-[0.96];
+  }
+
+  /* Skip-to-content — bắt buộc cho keyboard user (redesign audit: Strategic Omissions) */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-background;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-colors duration-150 focus:border-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30;
+  }
+
+  .badge-accent {
+    @apply inline-flex items-center rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground;
+  }
+
+  /* Skeleton loading — dùng cho khối gợi ý cá nhân hóa trong lúc chờ API (thay vì spinner chặn UI) */
+  .skeleton {
+    @apply animate-pulse rounded-md bg-muted;
+  }
+
+  /* Zoom chậm cho ảnh hero landing - thuần CSS, không cần JS/canvas. Khối reduced-motion phía dưới
+     đã tắt animation toàn site nên không cần lặp lại guard riêng ở đây. */
+  .animate-kenburns {
+    animation: kenburns 20s ease-out forwards;
+  }
+}
+
+@keyframes kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
