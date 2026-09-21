@@ -32,7 +32,10 @@ async function bootstrap() {
 
   const port = process.env.CORE_BACKEND_PORT || 4000;
   await app.listen(port);
+  // Cổng NỘI BỘ container tự lắng nghe - không phải domain public thật (local hay Render đều in
+  // y hệt dòng này). Ghi rõ "cổng nội bộ" để không hiểu nhầm là server đang chạy sai chỗ khi xem
+  // log deploy trên Render.
   // eslint-disable-next-line no-console
-  console.log(`Core Backend đang chạy tại http://localhost:${port}/api/v1`);
+  console.log(`Core Backend đã khởi động, lắng nghe cổng nội bộ ${port} (đường dẫn API: /api/v1)`);
 }
 bootstrap();
