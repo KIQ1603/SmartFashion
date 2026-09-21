@@ -22,9 +22,8 @@ services:
   - type: web
     name: smartfashion-backend
     runtime: docker
-    dockerfilePath: ./core-backend/Dockerfile
+    dockerfilePath: ./core-backend/Dockerfile.render
     dockerContext: ./core-backend
-    dockerCommand: sh render-start.sh
     plan: free
     healthCheckPath: /api/v1/settings
     envVars:
@@ -87,9 +86,8 @@ services:
   - type: web
     name: smartfashion-storefront
     runtime: docker
-    dockerfilePath: ./storefront/Dockerfile
+    dockerfilePath: ./storefront/Dockerfile.render
     dockerContext: ./storefront
-    dockerCommand: sh render-start.sh
     plan: free
     envVars:
       - key: NEXT_PUBLIC_API_URL

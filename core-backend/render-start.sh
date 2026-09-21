@@ -1,8 +1,6 @@
 #!/bin/sh
-# Render "dockerCommand" không chạy qua shell thật (exec trực tiếp, tách theo khoảng trắng) nên
-# "&&" và dấu ngoặc kép trong render.yaml không hoạt động như trên máy local - dùng script riêng
-# này để chạy nhiều bước: build production, áp migration, rồi mới start server thật.
+# Build TypeScript đã bake sẵn vào image lúc dựng (xem Dockerfile.render) - ở đây chỉ còn áp
+# migration (cần DATABASE_URL thật của Render, không có lúc build image) rồi start server thật.
 set -e
-npm run build
 npx prisma migrate deploy
 node dist/main

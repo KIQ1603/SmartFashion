@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+# NEXT_PUBLIC_* được Next.js nhúng thẳng vào bundle client ngay lúc build (next build), không phải
+# lúc chạy - phải khai ARG rồi promote lên ENV thì "npm run build" mới nhìn thấy được. Render tự
+# forward các biến môi trường của service làm build arg cho Docker build cùng tên.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# Build ngay lúc dựng image (không phải lúc container khởi động) - "next build" khá nặng, nếu để
+# chạy lúc start container thì Render chờ mở port không kịp và coi như deploy fail (No open ports
+# detected). Dockerfile riêng cho Render - không đụng vào Dockerfile gốc dùng cho dev local.
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start"]

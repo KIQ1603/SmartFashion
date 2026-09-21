@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Prisma engine cần OpenSSL - Alpine không có sẵn, thiếu thư viện này sẽ gây lỗi
+# "Could not parse schema engine response" khi chạy migrate/generate trong container.
+RUN apk add --no-cache openssl libssl3
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npx prisma generate
+
+# Build TypeScript ngay lúc dựng image, không phải lúc container khởi động - "nest build" không
+# cần biến môi trường DB nên build trước ở đây an toàn, đỡ phải chờ lúc start (cùng lý do với
+# storefront/Dockerfile.render). "prisma migrate deploy" thì PHẢI chạy lúc container start thật
+# (cần DATABASE_URL thật của Render) nên vẫn nằm trong render-start.sh, không build sẵn được.
+RUN npm run build
+
+EXPOSE 4000
+
+CMD ["sh", "render-start.sh"]
