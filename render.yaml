@@ -24,7 +24,7 @@ services:
     runtime: docker
     dockerfilePath: ./core-backend/Dockerfile
     dockerContext: ./core-backend
-    dockerCommand: sh -c "npm run build && npx prisma migrate deploy && node dist/main"
+    dockerCommand: sh render-start.sh
     plan: free
     healthCheckPath: /api/v1/settings
     envVars:
@@ -94,7 +94,7 @@ services:
     runtime: docker
     dockerfilePath: ./storefront/Dockerfile
     dockerContext: ./storefront
-    dockerCommand: sh -c "npm run build && npm run start"
+    dockerCommand: sh render-start.sh
     plan: free
     envVars:
       - key: NEXT_PUBLIC_API_URL
